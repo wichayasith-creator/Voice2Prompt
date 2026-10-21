@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*$py.class
+
+# PyInstaller build artifacts & binaries
+build/
+dist/
+
+# Local environment & user secrets (NEVER commit!)
+.env
+.env.*
+!.env.example
+config.json
+
+# IDE / OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
