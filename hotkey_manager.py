@@ -12,11 +12,12 @@ WM_QUIT = 0x0012
 
 HOTKEY_PRESETS = {
     "Ctrl + Alt + Space": (MOD_CONTROL | MOD_ALT, 0x20),   # VK_SPACE
-    "Ctrl + Shift + R": (MOD_CONTROL | MOD_SHIFT, ord('R')),
-    "Ctrl + Alt + R": (MOD_CONTROL | MOD_ALT, ord('R')),
+    "Ctrl + Shift + R": (MOD_CONTROL | MOD_SHIFT, ord("R")),
+    "Ctrl + Alt + R": (MOD_CONTROL | MOD_ALT, ord("R")),
     "F8": (0, 0x77),                                       # VK_F8
-    "F9": (0, 0x78)                                        # VK_F9
+    "F9": (0, 0x78),                                       # VK_F9
 }
+
 
 class GlobalHotkeyManager:
     """
@@ -28,21 +29,25 @@ class GlobalHotkeyManager:
         self.thread = None
         self.thread_id = None
         self.enabled = False
+        self.registered = False
         self.combo_name = "Ctrl + Alt + Space"
         self._lock = threading.Lock()
 
-    def start(self, combo_name: str = "Ctrl + Alt + Space"):
+    def start(self, combo_name: str = "Ctrl + Alt + Space") -> bool:
         with self._lock:
             self.stop()
             self.combo_name = combo_name
             self.enabled = True
+            self.registered = False
             ready_event = threading.Event()
             self.thread = threading.Thread(target=self._run_loop, args=(ready_event,), daemon=True)
             self.thread.start()
             ready_event.wait(timeout=1.0)
+            return self.registered
 
     def stop(self):
         self.enabled = False
+        self.registered = False
         if self.thread_id:
             try:
                 ctypes.windll.user32.PostThreadMessageW(self.thread_id, WM_QUIT, 0, 0)
@@ -58,12 +63,15 @@ class GlobalHotkeyManager:
         self.thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
         mod, vk = HOTKEY_PRESETS.get(self.combo_name, HOTKEY_PRESETS["Ctrl + Alt + Space"])
 
-        # Try RegisterHotKey with MOD_NOREPEAT, fallback without
         res = user32.RegisterHotKey(None, 1, mod | MOD_NOREPEAT, vk)
         if not res:
             res = user32.RegisterHotKey(None, 1, mod, vk)
 
+        self.registered = bool(res)
         ready_event.set()
+
+        if not self.registered:
+            return
 
         msg = wintypes.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:

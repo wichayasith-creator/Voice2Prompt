@@ -4,6 +4,7 @@ import threading
 import numpy as np
 import sounddevice as sd
 
+
 class AudioRecorder:
     def __init__(self, sample_rate: int = 16000):
         self.sample_rate = sample_rate
@@ -16,17 +17,14 @@ class AudioRecorder:
     def _audio_callback(self, indata, frames, time_info, status):
         if not self.is_recording:
             return
-        # Copy data
         data = indata.copy()
         with self._lock:
             self._frames.append(data)
-        
+
         # Calculate volume level (RMS) safely with float32 normalization
-        # Eliminates int16 squared overflow issues
         try:
             float_data = data.astype(np.float32) / 32768.0
             rms = float(np.sqrt(np.mean(float_data**2)))
-            # Scale rms smoothly for speaking voices (RMS typically 0.03 to 0.25)
             self.current_volume = min(1.0, max(0.0, rms * 4.0))
         except Exception:
             self.current_volume = 0.0
@@ -36,18 +34,29 @@ class AudioRecorder:
             return
         with self._lock:
             self._frames = []
-        self.is_recording = True
         self.current_volume = 0.0
-        
-        # Start sounddevice input stream
-        self._stream = sd.InputStream(
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="int16",
-            device=device_index,
-            callback=self._audio_callback
-        )
-        self._stream.start()
+
+        stream = None
+        try:
+            stream = sd.InputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="int16",
+                device=device_index,
+                callback=self._audio_callback,
+            )
+            stream.start()
+            self._stream = stream
+            self.is_recording = True
+        except Exception:
+            self.is_recording = False
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+            self._stream = None
+            raise
 
     def stop_recording(self) -> bytes:
         if not self.is_recording:
@@ -68,7 +77,6 @@ class AudioRecorder:
                 return b""
             audio_data = np.concatenate(self._frames, axis=0)
 
-        # Convert to WAV bytes in memory
         wav_buffer = io.BytesIO()
         with wave.open(wav_buffer, "wb") as wf:
             wf.setnchannels(1)
@@ -91,7 +99,7 @@ class AudioRecorder:
                     devices.append({
                         "index": idx,
                         "name": name,
-                        "is_default": (idx == default_in)
+                        "is_default": (idx == default_in),
                     })
         except Exception as e:
             print(f"Error querying audio devices: {e}")

@@ -3,7 +3,13 @@ import sys
 import io
 import json
 import wave
+import logging
 import requests
+
+from i18n import detect_default_ui_lang, t
+
+logger = logging.getLogger(__name__)
+
 
 def get_default_config_path() -> str:
     appdata = os.getenv("APPDATA")
@@ -12,6 +18,7 @@ def get_default_config_path() -> str:
     cfg_dir = os.path.join(appdata, "Voice2Prompt")
     os.makedirs(cfg_dir, exist_ok=True)
     return os.path.join(cfg_dir, "config.json")
+
 
 CONFIG_FILE = get_default_config_path()
 
@@ -34,38 +41,41 @@ def _candidate_env_files() -> list:
 
 def _load_env_groq_key(env_path: str = None) -> str:
     """
-    Loads GROQ_API_KEY from process environment or a local .env file.
-    Supports ENV_FILE=<path> pointer inside .env for external secret vaults.
+    Loads GROQ_API_KEY from process environment or a .env file.
     """
     env_key = os.getenv("GROQ_API_KEY", "").strip()
     if env_key:
         return env_key
 
     search_list = [env_path] if env_path else _candidate_env_files()
-    for start_path in search_list:
-        if not start_path or not os.path.exists(start_path):
+    for path in search_list:
+        if not path or not os.path.exists(path):
             continue
         try:
-            visited = set()
-            cur_path = start_path
-            while cur_path and os.path.exists(cur_path) and cur_path not in visited:
-                visited.add(cur_path)
-                next_path = None
-                with open(cur_path, "r", encoding="utf-8", errors="ignore") as f:
-                    for raw_line in f:
-                        line = raw_line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        if line.startswith("GROQ_API_KEY="):
-                            val = line.split("=", 1)[1].strip().strip("\"'")
-                            if val:
-                                return val
-                        elif line.startswith("ENV_FILE="):
-                            next_path = line.split("=", 1)[1].strip().strip("\"'")
-                cur_path = next_path
-        except Exception:
-            pass
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("GROQ_API_KEY="):
+                        val = line.split("=", 1)[1].strip().strip("\"'")
+                        if val:
+                            return val
+        except Exception as e:
+            logger.warning("Failed to read .env file at %s: %s", path, e)
     return ""
+
+
+def _format_retry_wait(retry_after_header: str | None, ui_lang: str) -> str:
+    if retry_after_header:
+        val_str = str(retry_after_header).strip()
+        try:
+            secs = int(float(val_str))
+            if secs > 0:
+                return f"{secs} วินาที" if ui_lang == "th" else f"{secs} seconds"
+        except ValueError:
+            pass
+    return "1 นาที" if ui_lang == "th" else "1 minute"
 
 
 class STTService:
@@ -78,11 +88,12 @@ class STTService:
         data = {
             "groq_api_key": "",
             "language": "th",
+            "ui_language": detect_default_ui_lang(),
             "model": "whisper-large-v3",
             "device_index": None,
             "auto_copy": True,
             "global_hotkey_enabled": True,
-            "global_hotkey_combo": "Ctrl + Alt + Space"
+            "global_hotkey_combo": "Ctrl + Alt + Space",
         }
         # 1. Try loading from AppData config.json
         if os.path.exists(self.config_path):
@@ -91,7 +102,7 @@ class STTService:
                     saved = json.load(f)
                     data.update(saved)
             except Exception as e:
-                print(f"Error reading config: {e}")
+                logger.warning("Error reading config %s: %s", self.config_path, e)
 
         # 2. If no key in config.json, fall back to environment / .env
         if not data.get("groq_api_key"):
@@ -107,7 +118,6 @@ class STTService:
     def save_setting(self, key: str, value):
         """Update in-memory setting and persist to config.json (safely ignoring env keys)."""
         if key == "groq_api_key":
-            # If user explicitly enters or modifies the key
             value = str(value).strip()
             self._key_from_env = False
             self.config[key] = value
@@ -128,7 +138,6 @@ class STTService:
         """
         to_save = dict(self.config)
         if self._key_from_env:
-            # Strip key before saving to prevent leakage of environment credentials
             to_save["groq_api_key"] = ""
 
         try:
@@ -136,13 +145,14 @@ class STTService:
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(to_save, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Error persisting config: {e}")
+            logger.warning("Error persisting config %s: %s", self.config_path, e)
 
     @staticmethod
-    def chunk_wav_bytes(wav_bytes: bytes, max_seconds: int = 600) -> list:
+    def chunk_wav_bytes(wav_bytes: bytes, max_seconds: int = 600, ui_lang: str = "th") -> list:
         """
         Splits WAV audio into chunks not exceeding max_seconds (default 10 min / ~19.2 MB),
         preventing HTTP 413 Payload Too Large on Groq Whisper (25 MB limit).
+        Raises ValueError if wav_bytes is not a valid WAV container.
         """
         try:
             with io.BytesIO(wav_bytes) as bio:
@@ -172,48 +182,64 @@ class STTService:
                         c_bio.seek(0)
                         chunks.append(c_bio.read())
                     return chunks
-        except Exception:
-            return [wav_bytes]
+        except Exception as e:
+            logger.error("Invalid or corrupted WAV audio data in chunk_wav_bytes: %s", e)
+            raise ValueError(t("err_invalid_wav", lang=ui_lang)) from e
 
     def _transcribe_single_chunk(self, wav_bytes: bytes, language: str = None) -> str:
+        ui_lang = self.config.get("ui_language", "th")
         api_key = self.config.get("groq_api_key", "").strip()
         if not api_key:
-            raise ValueError("ยังไม่ได้ตั้งค่า GROQ_API_KEY กรุณาใส่ API Key ในการตั้งค่า")
+            raise ValueError(t("err_no_api_key", lang=ui_lang))
 
         if not wav_bytes or len(wav_bytes) < 1000:
             return ""
 
         url = "https://api.groq.com/openai/v1/audio/transcriptions"
         headers = {
-            "Authorization": f"Bearer {api_key}"
+            "Authorization": f"Bearer {api_key}",
         }
         files = {
-            "file": ("recording.wav", wav_bytes, "audio/wav")
+            "file": ("recording.wav", wav_bytes, "audio/wav"),
         }
 
         target_lang = language or self.config.get("language", "th")
         data = {
             "model": self.config.get("model", "whisper-large-v3"),
-            "response_format": "json"
+            "response_format": "json",
         }
 
         if target_lang and target_lang != "auto":
             data["language"] = target_lang
 
-        # Context prompt for Thai/English tech & AI prompts
-        data["prompt"] = "สนทนาภาษาไทยและอังกฤษ ป้อนคำสั่ง AI เขียนโค้ด พรอมต์"
+        # Send Thai context prompt ONLY when spoken language is Thai ('th') or Auto ('auto')
+        if target_lang in ("th", "auto", None, ""):
+            data["prompt"] = "สนทนาภาษาไทยและอังกฤษ ป้อนคำสั่ง AI เขียนโค้ด พรอมต์"
 
-        response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        try:
+            response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+        except requests.exceptions.Timeout as e:
+            logger.warning("Groq transcription request timed out.")
+            raise RuntimeError(t("err_timeout", lang=ui_lang)) from e
+        except requests.exceptions.ConnectionError as e:
+            logger.warning("Groq transcription connection error.")
+            raise RuntimeError(t("err_network_conn", lang=ui_lang)) from e
+        except requests.exceptions.RequestException as e:
+            logger.warning("Groq transcription network exception.")
+            raise RuntimeError(t("err_network_conn", lang=ui_lang)) from e
 
-        if response.status_code != 200:
-            error_msg = response.text
-            try:
-                err_json = response.json()
-                if "error" in err_json and "message" in err_json["error"]:
-                    error_msg = err_json["error"]["message"]
-            except Exception:
-                pass
-            raise RuntimeError(f"API Error ({response.status_code}): {error_msg}")
+        status = response.status_code
+        if status != 200:
+            if status == 429:
+                headers_dict = getattr(response, "headers", {}) or {}
+                retry_hdr = headers_dict.get("Retry-After") or headers_dict.get("retry-after")
+                wait_str = _format_retry_wait(retry_hdr, ui_lang)
+                raise RuntimeError(t("err_rate_limit_429", lang=ui_lang, wait=wait_str))
+            if status in (401, 403):
+                raise RuntimeError(t("err_auth_401_403", lang=ui_lang))
+            if status >= 500:
+                raise RuntimeError(t("err_server_5xx", lang=ui_lang, code=status))
+            raise RuntimeError(t("err_generic_api", lang=ui_lang, code=status))
 
         result = response.json()
         return result.get("text", "").strip()
@@ -223,7 +249,8 @@ class STTService:
         Transcribes audio using Groq Whisper. Automatically handles chunking
         if recording exceeds 10 minutes (~19.2 MB).
         """
-        chunks = self.chunk_wav_bytes(wav_bytes, max_seconds=600)
+        ui_lang = self.config.get("ui_language", "th")
+        chunks = self.chunk_wav_bytes(wav_bytes, max_seconds=600, ui_lang=ui_lang)
         results = []
         for chunk in chunks:
             text = self._transcribe_single_chunk(chunk, language=language)

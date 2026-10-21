@@ -17,6 +17,13 @@ except Exception:
     except Exception:
         pass
 
+from version import __version__
+from i18n import (
+    t,
+    SUPPORTED_UI_LANGUAGES,
+    get_spoken_language_display_map,
+    get_spoken_language_label,
+)
 from audio_recorder import AudioRecorder
 from stt_service import STTService
 from history_manager import HistoryManager
@@ -28,13 +35,10 @@ ctk.set_default_color_theme("blue")
 FONT_FAMILY = "Leelawadee UI"
 MAX_RECORDING_SECONDS = 720  # 12 minutes (~23 MB WAV, safely within Groq 25 MB limit)
 
+
 class Voice2PromptApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-
-        self.title("Voice2Prompt — Voice-to-Text สำหรับคุยกับ AI")
-        self.geometry("1040x700")
-        self.minsize(880, 580)
 
         # Services
         self.history_mgr = HistoryManager()
@@ -42,21 +46,35 @@ class Voice2PromptApp(ctk.CTk):
         self.recorder = AudioRecorder()
 
         # State
+        self.ui_lang = self.stt_service.config.get("ui_lang", "th")
         self.record_start_time = 0
         self.is_recording = False
         self.is_processing = False
         self.append_mode = False
         self.auto_copy = self.stt_service.config.get("auto_copy", True)
+        self._startup_hotkey_conflict_combo = None
+
+        self.title(t("app_title", lang=self.ui_lang, version=__version__))
+        self.geometry("1040x700")
+        self.minsize(880, 580)
 
         # Global Hotkey Manager
         self.hotkey_mgr = GlobalHotkeyManager(callback=self._on_global_hotkey)
         if self.stt_service.config.get("global_hotkey_enabled", True):
             combo = self.stt_service.config.get("global_hotkey_combo", "Ctrl + Alt + Space")
-            self.hotkey_mgr.start(combo)
+            ok = self.hotkey_mgr.start(combo)
+            if not ok:
+                self._startup_hotkey_conflict_combo = combo
 
         self._build_ui()
         self._bind_shortcuts()
         self._load_history()
+
+        if self._startup_hotkey_conflict_combo:
+            self.status_label.configure(
+                text=t("status_hotkey_conflict", lang=self.ui_lang, combo=self._startup_hotkey_conflict_combo),
+                text_color="#fbbf24",
+            )
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -83,36 +101,36 @@ class Voice2PromptApp(ctk.CTk):
             self.header_frame,
             text="🎙️ Voice2Prompt",
             font=ctk.CTkFont(family=FONT_FAMILY, size=20, weight="bold"),
-            text_color="#f4f4f5"
+            text_color="#f4f4f5",
         )
         self.logo_label.pack(side="left", padx=20, pady=12)
 
         self.sub_logo = ctk.CTkLabel(
             self.header_frame,
-            text="Speech-to-Text Studio for AI Prompting",
+            text=t("app_subtitle", lang=self.ui_lang, version=__version__),
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#a1a1aa"
+            text_color="#a1a1aa",
         )
         self.sub_logo.pack(side="left", pady=12)
 
         # Header controls
         self.btn_settings = ctk.CTkButton(
             self.header_frame,
-            text="⚙️ ตั้งค่า",
+            text=t("btn_settings", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            width=84,
+            width=100,
             height=32,
             fg_color="#27272a",
             hover_color="#3f3f46",
-            command=self._open_settings
+            command=self._open_settings,
         )
         self.btn_settings.pack(side="right", padx=15, pady=14)
 
         self.switch_ontop = ctk.CTkSwitch(
             self.header_frame,
-            text="📌 ปักหมุดบนสุด",
+            text=t("switch_ontop", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            command=self._toggle_always_on_top
+            command=self._toggle_always_on_top,
         )
         self.switch_ontop.pack(side="right", padx=10, pady=14)
 
@@ -140,13 +158,13 @@ class Voice2PromptApp(ctk.CTk):
         # Record button
         self.btn_record = ctk.CTkButton(
             self.rec_control_box,
-            text="🔴 กดเพื่อพูด (Record / Spacebar)",
+            text=t("btn_record_idle", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             fg_color="#e11d48",
             hover_color="#be123c",
             height=46,
             corner_radius=23,
-            command=self._toggle_record
+            command=self._toggle_record,
         )
         self.btn_record.pack(fill="x", padx=15, pady=(15, 10))
 
@@ -156,9 +174,9 @@ class Voice2PromptApp(ctk.CTk):
 
         self.status_label = ctk.CTkLabel(
             stat_frame,
-            text="⚪ พร้อมบันทึกเสียง (กดปุ่มหรือ Spacebar)",
+            text=t("status_ready", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            text_color="#a1a1aa"
+            text_color="#a1a1aa",
         )
         self.status_label.pack(side="left")
 
@@ -166,7 +184,7 @@ class Voice2PromptApp(ctk.CTk):
             stat_frame,
             text="00:00",
             font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
-            text_color="#f4f4f5"
+            text_color="#f4f4f5",
         )
         self.timer_label.pack(side="right")
 
@@ -182,17 +200,17 @@ class Voice2PromptApp(ctk.CTk):
 
         self.editor_title = ctk.CTkLabel(
             editor_header,
-            text="📝 ข้อความสำหรับส่งให้ AI (สามารถพิมพ์แก้ไขได้โดยตรง):",
+            text=t("editor_title", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            text_color="#e4e4e7"
+            text_color="#e4e4e7",
         )
         self.editor_title.pack(side="left")
 
         self.char_count_label = ctk.CTkLabel(
             editor_header,
-            text="0 ตัวอักษร",
+            text=t("char_count", lang=self.ui_lang, count=0),
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#71717a"
+            text_color="#71717a",
         )
         self.char_count_label.pack(side="right")
 
@@ -203,7 +221,7 @@ class Voice2PromptApp(ctk.CTk):
             wrap="word",
             corner_radius=8,
             fg_color="#09090b",
-            text_color="#fafafa"
+            text_color="#fafafa",
         )
         self.textbox.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         self.textbox.bind("<KeyRelease>", self._on_text_change)
@@ -215,22 +233,22 @@ class Voice2PromptApp(ctk.CTk):
         # Big Copy Button
         self.btn_copy = ctk.CTkButton(
             action_bar,
-            text="📋 คัดลอกข้อความ (Copy to Clipboard)",
+            text=t("btn_copy", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
             fg_color="#059669",
             hover_color="#047857",
             height=42,
             corner_radius=8,
-            command=self._copy_text
+            command=self._copy_text,
         )
         self.btn_copy.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         # Auto Copy Checkbox
         self.check_autocopy = ctk.CTkCheckBox(
             action_bar,
-            text="📋 Copy อัตโนมัติ",
+            text=t("check_autocopy", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            command=self._toggle_autocopy
+            command=self._toggle_autocopy,
         )
         if self.auto_copy:
             self.check_autocopy.select()
@@ -241,22 +259,22 @@ class Voice2PromptApp(ctk.CTk):
         # Append Mode Checkbox
         self.check_append = ctk.CTkCheckBox(
             action_bar,
-            text="ต่อท้ายข้อความเดิม",
+            text=t("check_append", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            command=self._toggle_append_mode
+            command=self._toggle_append_mode,
         )
         self.check_append.pack(side="right", padx=6)
 
         # Clear Button
         self.btn_clear = ctk.CTkButton(
             action_bar,
-            text="🧹 ล้าง",
+            text=t("btn_clear", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            width=70,
+            width=76,
             height=42,
             fg_color="#27272a",
             hover_color="#3f3f46",
-            command=self._clear_text
+            command=self._clear_text,
         )
         self.btn_clear.pack(side="right", padx=(0, 6))
 
@@ -265,33 +283,62 @@ class Voice2PromptApp(ctk.CTk):
         hist_header = ctk.CTkFrame(self.right_frame, fg_color="transparent")
         hist_header.pack(fill="x", padx=15, pady=(15, 10))
 
-        lbl_hist = ctk.CTkLabel(
+        self.lbl_hist = ctk.CTkLabel(
             hist_header,
-            text="🕒 ประวัติ 10 ข้อความล่าสุด",
+            text=t("hist_title", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
-            text_color="#f4f4f5"
+            text_color="#f4f4f5",
         )
-        lbl_hist.pack(side="left")
+        self.lbl_hist.pack(side="left")
 
-        btn_clear_hist = ctk.CTkButton(
+        self.btn_clear_hist = ctk.CTkButton(
             hist_header,
-            text="ล้าง",
-            width=48,
+            text=t("btn_clear_hist", lang=self.ui_lang),
+            width=54,
             height=26,
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             fg_color="#27272a",
             hover_color="#71717a",
-            command=self._clear_history
+            command=self._clear_history,
         )
-        btn_clear_hist.pack(side="right")
+        self.btn_clear_hist.pack(side="right")
 
         # Scrollable list for cards
         self.history_scroll = ctk.CTkScrollableFrame(
             self.right_frame,
             fg_color="transparent",
-            corner_radius=0
+            corner_radius=0,
         )
         self.history_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 10))
+
+    def apply_ui_language(self, lang: str = None):
+        """Update all visible UI widgets to match the active UI language ('th' or 'en')."""
+        if lang in SUPPORTED_UI_LANGUAGES:
+            self.ui_lang = lang
+        else:
+            self.ui_lang = self.stt_service.config.get("ui_lang", "th")
+
+        self.title(t("app_title", lang=self.ui_lang, version=__version__))
+        self.sub_logo.configure(text=t("app_subtitle", lang=self.ui_lang, version=__version__))
+        self.btn_settings.configure(text=t("btn_settings", lang=self.ui_lang))
+        self.switch_ontop.configure(text=t("switch_ontop", lang=self.ui_lang))
+
+        if self.is_recording:
+            self.btn_record.configure(text=t("btn_record_listening", lang=self.ui_lang))
+        elif self.is_processing:
+            self.btn_record.configure(text=t("btn_record_processing", lang=self.ui_lang))
+        else:
+            self.btn_record.configure(text=t("btn_record_idle", lang=self.ui_lang))
+
+        self.editor_title.configure(text=t("editor_title", lang=self.ui_lang))
+        self._on_text_change()
+        self.btn_copy.configure(text=t("btn_copy", lang=self.ui_lang))
+        self.check_autocopy.configure(text=t("check_autocopy", lang=self.ui_lang))
+        self.check_append.configure(text=t("check_append", lang=self.ui_lang))
+        self.btn_clear.configure(text=t("btn_clear", lang=self.ui_lang))
+        self.lbl_hist.configure(text=t("hist_title", lang=self.ui_lang))
+        self.btn_clear_hist.configure(text=t("btn_clear_hist", lang=self.ui_lang))
+        self._load_history()
 
     def _bind_shortcuts(self):
         self.bind("<F8>", lambda e: self._toggle_record())
@@ -316,7 +363,7 @@ class Voice2PromptApp(ctk.CTk):
 
     def _on_text_change(self, event=None):
         text = self.textbox.get("1.0", "end-1c")
-        self.char_count_label.configure(text=f"{len(text)} ตัวอักษร")
+        self.char_count_label.configure(text=t("char_count", lang=self.ui_lang, count=len(text)))
 
     def _toggle_record(self):
         if self.is_processing:
@@ -337,16 +384,16 @@ class Voice2PromptApp(ctk.CTk):
 
             # UI Update
             self.btn_record.configure(
-                text="⏹️ กำลังฟัง... กดเพื่อหยุด (Stop)",
+                text=t("btn_record_listening", lang=self.ui_lang),
                 fg_color="#9f1239",
-                hover_color="#881337"
+                hover_color="#881337",
             )
-            self.status_label.configure(text="🔴 กำลังบันทึกเสียง...", text_color="#f43f5e")
+            self.status_label.configure(text=t("status_recording", lang=self.ui_lang), text_color="#f43f5e")
 
             # Main-thread periodic polling for timer & VU meter (Thread-safe)
             self._poll_timer_and_vu()
         except Exception as e:
-            messagebox.showerror("เกิดข้อผิดพลาดในการบันทึก", str(e))
+            messagebox.showerror(t("err_rec_title", lang=self.ui_lang), str(e))
             self.is_recording = False
 
     def _poll_timer_and_vu(self):
@@ -375,15 +422,15 @@ class Voice2PromptApp(ctk.CTk):
         self.vu_bar.set(0.0)
 
         self.btn_record.configure(
-            text="⏳ กำลังแปลงเสียง...",
+            text=t("btn_record_processing", lang=self.ui_lang),
             fg_color="#d97706",
             hover_color="#b45309",
-            state="disabled"
+            state="disabled",
         )
         if auto_limit:
-            self.status_label.configure(text="⏳ หยุดอัตโนมัติ (ครบ 12 นาที — ขีดจำกัดไฟล์ 25 MB)...", text_color="#fbbf24")
+            self.status_label.configure(text=t("status_auto_limit", lang=self.ui_lang), text_color="#fbbf24")
         else:
-            self.status_label.configure(text="⏳ กำลังส่งประมวลผล (Groq Whisper)...", text_color="#fbbf24")
+            self.status_label.configure(text=t("status_processing_groq", lang=self.ui_lang), text_color="#fbbf24")
 
         # Process STT in background thread
         threading.Thread(target=self._process_stt_thread, daemon=True).start()
@@ -392,20 +439,20 @@ class Voice2PromptApp(ctk.CTk):
         try:
             wav_bytes = self.recorder.stop_recording()
             if not wav_bytes:
-                self.after(0, lambda: self._update_status_after_stt("⚪ ไม่พบข้อมูลเสียง", "#a1a1aa"))
+                self.after(0, lambda: self._update_status_after_stt(t("status_no_audio", lang=self.ui_lang), "#a1a1aa"))
                 return
 
             text = self.stt_service.transcribe(wav_bytes)
             if not text:
-                self.after(0, lambda: self._update_status_after_stt("⚪ ตรวจไม่พบเสียงพูด", "#a1a1aa"))
+                self.after(0, lambda: self._update_status_after_stt(t("status_no_speech", lang=self.ui_lang), "#a1a1aa"))
                 return
 
             # Apply transcription on main thread
             self.after(0, lambda: self._apply_transcription(text))
         except Exception as e:
             err_msg = str(e)
-            self.after(0, lambda: messagebox.showerror("ข้อผิดพลาดในการแปลงเสียง", err_msg))
-            self.after(0, lambda: self._update_status_after_stt("❌ เกิดข้อผิดพลาด", "#f43f5e"))
+            self.after(0, lambda: messagebox.showerror(t("err_stt_title", lang=self.ui_lang), err_msg))
+            self.after(0, lambda: self._update_status_after_stt(t("status_error", lang=self.ui_lang), "#f43f5e"))
 
     def _apply_transcription(self, new_text: str):
         if self.append_mode:
@@ -428,17 +475,17 @@ class Voice2PromptApp(ctk.CTk):
         # Auto Copy if enabled
         if self.auto_copy:
             self._copy_text(silent=True)
-            self._update_status_after_stt("✅ แปลงเสียงและคัดลอกลง Clipboard แล้ว!", "#10b981")
+            self._update_status_after_stt(t("status_done_copied", lang=self.ui_lang), "#10b981")
         else:
-            self._update_status_after_stt("✅ แปลงเสียงเรียบร้อย!", "#10b981")
+            self._update_status_after_stt(t("status_done", lang=self.ui_lang), "#10b981")
 
     def _update_status_after_stt(self, status_text: str, color: str):
         self.is_processing = False
         self.btn_record.configure(
-            text="🔴 กดเพื่อพูด (Record / Spacebar)",
+            text=t("btn_record_idle", lang=self.ui_lang),
             fg_color="#e11d48",
             hover_color="#be123c",
-            state="normal"
+            state="normal",
         )
         self.status_label.configure(text=status_text, text_color=color)
 
@@ -451,9 +498,9 @@ class Voice2PromptApp(ctk.CTk):
         self.update()
 
         if not silent:
-            orig_text = self.btn_copy.cget("text")
+            orig_text = t("btn_copy", lang=self.ui_lang)
             orig_color = self.btn_copy.cget("fg_color")
-            self.btn_copy.configure(text="✅ คัดลอกเรียบร้อยแล้ว!", fg_color="#10b981")
+            self.btn_copy.configure(text=t("btn_copied_flash", lang=self.ui_lang), fg_color="#10b981")
             self.after(1400, lambda: self.btn_copy.configure(text=orig_text, fg_color=orig_color))
 
     def _clear_text(self):
@@ -469,9 +516,10 @@ class Voice2PromptApp(ctk.CTk):
         if not items:
             lbl_empty = ctk.CTkLabel(
                 self.history_scroll,
-                text="ยังไม่มีประวัติข้อความ (เก็บเฉพาะในเซสชัน)",
+                text=t("hist_empty", lang=self.ui_lang),
                 font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-                text_color="#71717a"
+                text_color="#71717a",
+                wraplength=300,
             )
             lbl_empty.pack(pady=20)
             return
@@ -487,31 +535,31 @@ class Voice2PromptApp(ctk.CTk):
                 top_row,
                 text=f"🕒 {item.get('time_display', '')}",
                 font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-                text_color="#a1a1aa"
+                text_color="#a1a1aa",
             )
             time_lbl.pack(side="left")
 
             btn_use = ctk.CTkButton(
                 top_row,
-                text="✏️ ใช้",
-                width=48,
+                text=t("btn_hist_use", lang=self.ui_lang),
+                width=52,
                 height=22,
                 font=ctk.CTkFont(family=FONT_FAMILY, size=11),
                 fg_color="#3f3f46",
                 hover_color="#52525b",
-                command=lambda t=item['text']: self._load_item_to_editor(t)
+                command=lambda txt=item["text"]: self._load_item_to_editor(txt),
             )
             btn_use.pack(side="right", padx=(4, 0))
 
             btn_card_copy = ctk.CTkButton(
                 top_row,
-                text="📋 Copy",
+                text=t("btn_hist_copy", lang=self.ui_lang),
                 width=54,
                 height=22,
                 font=ctk.CTkFont(family=FONT_FAMILY, size=11),
                 fg_color="#059669",
                 hover_color="#047857",
-                command=lambda t=item['text']: self._copy_specific_text(t)
+                command=lambda txt=item["text"]: self._copy_specific_text(txt),
             )
             btn_card_copy.pack(side="right")
 
@@ -526,7 +574,7 @@ class Voice2PromptApp(ctk.CTk):
                 text_color="#e4e4e7",
                 wraplength=280,
                 justify="left",
-                anchor="w"
+                anchor="w",
             )
             msg_lbl.pack(fill="x", padx=8, pady=(0, 8), anchor="w")
 
@@ -534,35 +582,60 @@ class Voice2PromptApp(ctk.CTk):
         self.clipboard_clear()
         self.clipboard_append(text)
         self.update()
-        self.status_label.configure(text="✅ คัดลอกข้อความจากประวัติแล้ว!", text_color="#10b981")
+        self.status_label.configure(text=t("status_copied_history", lang=self.ui_lang), text_color="#10b981")
 
     def _load_item_to_editor(self, text: str):
         self.textbox.delete("1.0", "end")
         self.textbox.insert("1.0", text)
         self._on_text_change()
-        self.status_label.configure(text="📝 โหลดข้อความเข้าช่องแก้ไขแล้ว", text_color="#38bdf8")
+        self.status_label.configure(text=t("status_loaded_history", lang=self.ui_lang), text_color="#38bdf8")
 
     def _clear_history(self):
-        if messagebox.askyesno("ยืนยัน", "ต้องการล้างประวัติข้อความทั้งหมดหรือไม่?"):
+        if messagebox.askyesno(
+            t("confirm_clear_hist_title", lang=self.ui_lang),
+            t("confirm_clear_hist_msg", lang=self.ui_lang),
+        ):
             self.history_mgr.clear()
             self._load_history()
 
     # ── Settings Dialog ──────────────────────────────────────────────────────
     def _open_settings(self):
         settings_win = ctk.CTkToplevel(self)
-        settings_win.title("ตั้งค่า Voice2Prompt")
-        settings_win.geometry("520x520")
+        settings_win.title(t("settings_title", lang=self.ui_lang, version=__version__))
+        settings_win.geometry("520x590")
         settings_win.resizable(False, False)
         settings_win.attributes("-topmost", True)
         settings_win.grab_set()
 
         pad_f = ctk.CTkFrame(settings_win, fg_color="transparent")
-        pad_f.pack(fill="both", expand=True, padx=25, pady=20)
+        pad_f.pack(fill="both", expand=True, padx=25, pady=18)
+
+        # 0. UI Language
+        ctk.CTkLabel(
+            pad_f,
+            text=t("settings_ui_lang", lang=self.ui_lang),
+            font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
+        ).pack(anchor="w", pady=(0, 2))
+        ui_lang_display_to_code = {label: code for code, label in SUPPORTED_UI_LANGUAGES.items()}
+        ui_lang_combo = ctk.CTkComboBox(
+            pad_f,
+            values=list(ui_lang_display_to_code.keys()),
+            width=460,
+            font=ctk.CTkFont(family=FONT_FAMILY),
+        )
+        ui_lang_combo.set(SUPPORTED_UI_LANGUAGES.get(self.ui_lang, SUPPORTED_UI_LANGUAGES["th"]))
+        ui_lang_combo.pack(pady=(0, 10))
 
         # 1. Microphone Device
-        ctk.CTkLabel(pad_f, text="🎙️ ไมโครโฟน (Audio Input Device):", font=ctk.CTkFont(family=FONT_FAMILY, weight="bold")).pack(anchor="w", pady=(0, 2))
+        ctk.CTkLabel(
+            pad_f,
+            text=t("settings_mic", lang=self.ui_lang),
+            font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
+        ).pack(anchor="w", pady=(0, 2))
         devices = AudioRecorder.list_input_devices()
-        dev_names = [f"[{d['index']}] {d['name']}" for d in devices] or ["Default Microphone"]
+        dev_names = [f"[{d['index']}] {d['name']}" for d in devices] or [
+            t("settings_default_mic", lang=self.ui_lang)
+        ]
 
         current_dev_idx = self.stt_service.config.get("device_index")
         default_val = dev_names[0]
@@ -574,35 +647,55 @@ class Voice2PromptApp(ctk.CTk):
 
         dev_combo = ctk.CTkComboBox(pad_f, values=dev_names, width=460, font=ctk.CTkFont(family=FONT_FAMILY))
         dev_combo.set(default_val)
-        dev_combo.pack(pady=(0, 12))
+        dev_combo.pack(pady=(0, 10))
 
         # 2. Groq API Key
-        ctk.CTkLabel(pad_f, text="🔑 Groq API Key (รับคีย์ฟรีได้ที่ console.groq.com หรือตั้งใน .env):", font=ctk.CTkFont(family=FONT_FAMILY, weight="bold")).pack(anchor="w", pady=(0, 2))
-        key_entry = ctk.CTkEntry(pad_f, width=460, show="*", placeholder_text="gsk_...", font=ctk.CTkFont(family=FONT_FAMILY))
+        ctk.CTkLabel(
+            pad_f,
+            text=t("settings_api_key", lang=self.ui_lang),
+            font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
+        ).pack(anchor="w", pady=(0, 2))
+        key_entry = ctk.CTkEntry(
+            pad_f,
+            width=460,
+            show="*",
+            placeholder_text="gsk_...",
+            font=ctk.CTkFont(family=FONT_FAMILY),
+        )
         key_entry.insert(0, self.stt_service.config.get("groq_api_key", ""))
-        key_entry.pack(pady=(0, 12))
+        key_entry.pack(pady=(0, 10))
 
-        # 3. Language
-        ctk.CTkLabel(pad_f, text="🌐 ภาษาหลัก (Language):", font=ctk.CTkFont(family=FONT_FAMILY, weight="bold")).pack(anchor="w", pady=(0, 2))
-        lang_options = {"ไทย (th)": "th", "English (en)": "en", "ตรวจจับอัตโนมัติ (Auto)": "auto"}
-        lang_combo = ctk.CTkComboBox(pad_f, values=list(lang_options.keys()), width=460, font=ctk.CTkFont(family=FONT_FAMILY))
+        # 3. Spoken Language (11 verified languages + Auto)
+        ctk.CTkLabel(
+            pad_f,
+            text=t("settings_spoken_lang", lang=self.ui_lang),
+            font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
+        ).pack(anchor="w", pady=(0, 2))
+        spoken_lang_map = get_spoken_language_display_map(self.ui_lang)
+        lang_combo = ctk.CTkComboBox(
+            pad_f,
+            values=list(spoken_lang_map.keys()),
+            width=460,
+            font=ctk.CTkFont(family=FONT_FAMILY),
+        )
 
         cur_lang = self.stt_service.config.get("language", "th")
-        for k, v in lang_options.items():
-            if v == cur_lang:
-                lang_combo.set(k)
-                break
-        lang_combo.pack(pady=(0, 12))
+        lang_combo.set(get_spoken_language_label(cur_lang, self.ui_lang))
+        lang_combo.pack(pady=(0, 10))
 
-        # 4. Global Hotkey Settings (เปิด/ปิด และเลือกปุ่ม)
-        ctk.CTkLabel(pad_f, text="⌨️ ระบบปุ่มลัด Global Hotkey (กดได้จากทุกหน้าต่าง):", font=ctk.CTkFont(family=FONT_FAMILY, weight="bold")).pack(anchor="w", pady=(0, 4))
-        
+        # 4. Global Hotkey Settings
+        ctk.CTkLabel(
+            pad_f,
+            text=t("settings_hotkey_header", lang=self.ui_lang),
+            font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
+        ).pack(anchor="w", pady=(0, 4))
+
         hotkey_enable_var = tk.BooleanVar(value=self.stt_service.config.get("global_hotkey_enabled", True))
         check_hotkey = ctk.CTkCheckBox(
             pad_f,
-            text="เปิดใช้งาน Global Hotkey",
+            text=t("settings_hotkey_enable", lang=self.ui_lang),
             variable=hotkey_enable_var,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=12)
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
         )
         check_hotkey.pack(anchor="w", pady=(0, 6))
 
@@ -613,10 +706,14 @@ class Voice2PromptApp(ctk.CTk):
             hotkey_combo.set(cur_combo)
         else:
             hotkey_combo.set(hotkey_options[0])
-        hotkey_combo.pack(pady=(0, 18))
+        hotkey_combo.pack(pady=(0, 16))
 
         # Save Button
         def save():
+            # UI Language
+            chosen_ui_lang = ui_lang_display_to_code.get(ui_lang_combo.get(), "th")
+            self.stt_service.save_setting("ui_lang", chosen_ui_lang)
+
             selected_dev_str = dev_combo.get()
             dev_idx = None
             if selected_dev_str.startswith("["):
@@ -626,14 +723,19 @@ class Voice2PromptApp(ctk.CTk):
                     dev_idx = None
 
             self.stt_service.save_setting("device_index", dev_idx)
-            
+
             # API Key
             new_key = key_entry.get().strip()
             orig_key = self.stt_service.config.get("groq_api_key", "").strip()
             if new_key != orig_key:
                 self.stt_service.set_user_api_key(new_key)
 
-            self.stt_service.save_setting("language", lang_options.get(lang_combo.get(), "th"))
+            # Spoken Language
+            chosen_spoken_code = spoken_lang_map.get(lang_combo.get(), "th")
+            self.stt_service.save_setting("language", chosen_spoken_code)
+
+            # Apply UI language immediately
+            self.apply_ui_language(chosen_ui_lang)
 
             # Global Hotkey
             hk_enabled = hotkey_enable_var.get()
@@ -641,25 +743,36 @@ class Voice2PromptApp(ctk.CTk):
             self.stt_service.save_setting("global_hotkey_enabled", hk_enabled)
             self.stt_service.save_setting("global_hotkey_combo", hk_choice)
 
-            # Reconfigure hotkey manager live
+            # Reconfigure hotkey manager live & check conflict
+            hotkey_ok = True
             if hk_enabled:
-                self.hotkey_mgr.start(hk_choice)
+                hotkey_ok = self.hotkey_mgr.start(hk_choice)
             else:
                 self.hotkey_mgr.stop()
 
             settings_win.destroy()
-            self.status_label.configure(text="✅ บันทึกการตั้งค่าเรียบร้อย", text_color="#10b981")
+            if hk_enabled and not hotkey_ok:
+                self.status_label.configure(
+                    text=t("status_hotkey_conflict", lang=self.ui_lang, combo=hk_choice),
+                    text_color="#fbbf24",
+                )
+            else:
+                self.status_label.configure(
+                    text=t("status_settings_saved", lang=self.ui_lang),
+                    text_color="#10b981",
+                )
 
         btn_save = ctk.CTkButton(
             pad_f,
-            text="บันทึกการตั้งค่า",
+            text=t("settings_btn_save", lang=self.ui_lang),
             font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
             fg_color="#10b981",
             hover_color="#059669",
             height=38,
-            command=save
+            command=save,
         )
         btn_save.pack(fill="x")
+
 
 if __name__ == "__main__":
     app = Voice2PromptApp()
