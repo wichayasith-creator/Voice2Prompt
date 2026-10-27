@@ -14,8 +14,11 @@
 > - **รองรับเฉพาะระบบปฏิบัติการ Windows เท่านั้น (Windows Only):** เนื่องจากใช้ระบบปุ่มลัดระดับ OS ผ่าน Win32 API (`RegisterHotKey` ใน `user32.dll`) และการตั้งค่าความคมชัดหน้าจอ DPI ของ Windows
 > - **ต้องใช้ Groq API Key ของคุณเอง:** ผู้ใช้ต้องสมัครและนำ Groq API Key ของตนเองมาใส่ (สมัครรับคีย์ฟรีได้ที่ [console.groq.com/keys](https://console.groq.com/keys))
 
-![Voice2Prompt Screenshot](docs/screenshot.png)
-*(พื้นที่สำหรับภาพหน้าจอโปรแกรม — แนะนำให้แคปภาพหน้าต่างโปรแกรมจริงของคุณแล้วบันทึกไว้ที่ `docs/screenshot.png`)*
+[![Voice2Prompt Screenshot](docs/screenshot.png)](https://youtu.be/ItGYqpLYgaA)
+
+> 🎬 **รับชมวิดีโอเบื้องหลังการสร้างและสาธิตวิธีใช้งาน (YouTube):**
+> - 🇹🇭 **[วิดีโอเวอร์ชันภาษาไทย (YouTube)](https://youtu.be/ItGYqpLYgaA)** — *Voice2Prompt : ลองสร้างเครื่องมือง่ายๆ ไว้ใช้ในชีวิตประจำวันด้วยตัวคุณเอง*
+> - 🌐 **[English Video / เวอร์ชันภาษาอังกฤษ (YouTube)](https://youtu.be/QMGolEp1nx4)** — *Voice2Prompt : Try building simple tools for your own everyday life*
 
 ---
 

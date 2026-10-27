@@ -14,8 +14,11 @@
 > - **Windows Only:** Uses the native Win32 `RegisterHotKey` API (`user32.dll`) for zero-hook global hotkeys and Windows DPI awareness.
 > - **Requires Your Own Groq API Key:** You must provide your own Groq API key (free tier available at [console.groq.com/keys](https://console.groq.com/keys)).
 
-![Voice2Prompt Screenshot](docs/screenshot.png)
-*(Screenshot preview — capture your live `Voice2Prompt` window and save it as `docs/screenshot.png`)*
+[![Voice2Prompt Screenshot](docs/screenshot.png)](https://youtu.be/QMGolEp1nx4)
+
+> 🎬 **Watch the Behind-the-Scenes & Workflow Video:**
+> - 🌐 **[English Video (YouTube)](https://youtu.be/QMGolEp1nx4)** — *Voice2Prompt: Try building simple tools for your own everyday life*
+> - 🇹🇭 **[Thai Video / เวอร์ชันภาษาไทย (YouTube)](https://youtu.be/ItGYqpLYgaA)** — *เบื้องหลังการสร้าง Voice2Prompt: ลองสร้างเครื่องมือง่ายๆ ไว้ใช้ในชีวิตประจำวันด้วยตัวคุณเอง*
 
 ---
 
