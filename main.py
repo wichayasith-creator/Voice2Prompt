@@ -82,6 +82,25 @@ class Voice2PromptApp(ctk.CTk):
         # Trigger record toggle safely on Tkinter main thread
         self.after(0, self._toggle_record)
 
+    def _play_sound_cue(self, kind: str):
+        """Play a non-blocking 2-tone audio cue on start/done if sound_cue_enabled is True."""
+        if not self.stt_service.config.get("sound_cue_enabled", True):
+            return
+
+        def _beep_worker():
+            try:
+                import winsound
+                if kind == "start":
+                    winsound.Beep(660, 55)
+                    winsound.Beep(880, 65)
+                elif kind == "done":
+                    winsound.Beep(784, 55)
+                    winsound.Beep(1175, 75)
+            except Exception:
+                pass
+
+        threading.Thread(target=_beep_worker, daemon=True).start()
+
     def _on_close(self):
         self.hotkey_mgr.stop()
         if self.is_recording:
@@ -381,6 +400,7 @@ class Voice2PromptApp(ctk.CTk):
             self.recorder.start_recording(device_index=device_idx)
             self.is_recording = True
             self.record_start_time = time.time()
+            self._play_sound_cue("start")
 
             # UI Update
             self.btn_record.configure(
@@ -473,6 +493,7 @@ class Voice2PromptApp(ctk.CTk):
         self._load_history()
 
         # Auto Copy if enabled
+        self._play_sound_cue("done")
         if self.auto_copy:
             self._copy_text(silent=True)
             self._update_status_after_stt(t("status_done_copied", lang=self.ui_lang), "#10b981")
@@ -602,13 +623,13 @@ class Voice2PromptApp(ctk.CTk):
     def _open_settings(self):
         settings_win = ctk.CTkToplevel(self)
         settings_win.title(t("settings_title", lang=self.ui_lang, version=__version__))
-        settings_win.geometry("520x590")
+        settings_win.geometry("540x650")
         settings_win.resizable(False, False)
         settings_win.attributes("-topmost", True)
         settings_win.grab_set()
 
         pad_f = ctk.CTkFrame(settings_win, fg_color="transparent")
-        pad_f.pack(fill="both", expand=True, padx=25, pady=18)
+        pad_f.pack(fill="both", expand=True, padx=25, pady=16)
 
         # 0. UI Language
         ctk.CTkLabel(
@@ -620,7 +641,7 @@ class Voice2PromptApp(ctk.CTk):
         ui_lang_combo = ctk.CTkComboBox(
             pad_f,
             values=list(ui_lang_display_to_code.keys()),
-            width=460,
+            width=480,
             font=ctk.CTkFont(family=FONT_FAMILY),
         )
         ui_lang_combo.set(SUPPORTED_UI_LANGUAGES.get(self.ui_lang, SUPPORTED_UI_LANGUAGES["th"]))
@@ -645,7 +666,7 @@ class Voice2PromptApp(ctk.CTk):
                     default_val = n
                     break
 
-        dev_combo = ctk.CTkComboBox(pad_f, values=dev_names, width=460, font=ctk.CTkFont(family=FONT_FAMILY))
+        dev_combo = ctk.CTkComboBox(pad_f, values=dev_names, width=480, font=ctk.CTkFont(family=FONT_FAMILY))
         dev_combo.set(default_val)
         dev_combo.pack(pady=(0, 10))
 
@@ -657,7 +678,7 @@ class Voice2PromptApp(ctk.CTk):
         ).pack(anchor="w", pady=(0, 2))
         key_entry = ctk.CTkEntry(
             pad_f,
-            width=460,
+            width=480,
             show="*",
             placeholder_text="gsk_...",
             font=ctk.CTkFont(family=FONT_FAMILY),
@@ -665,25 +686,49 @@ class Voice2PromptApp(ctk.CTk):
         key_entry.insert(0, self.stt_service.config.get("groq_api_key", ""))
         key_entry.pack(pady=(0, 10))
 
-        # 3. Spoken Language (11 verified languages + Auto)
+        # 3. Spoken Language Pair (Primary + Secondary Dual-Language Support)
+        dual_lbl_txt = (
+            "🌐 ภาษาที่ใช้พูดคู่ 2 ภาษา (ภาษาหลัก + ภาษารอง):"
+            if self.ui_lang == "th"
+            else t("settings_spoken_lang", lang=self.ui_lang)
+        )
         ctk.CTkLabel(
             pad_f,
-            text=t("settings_spoken_lang", lang=self.ui_lang),
+            text=dual_lbl_txt,
             font=ctk.CTkFont(family=FONT_FAMILY, weight="bold"),
         ).pack(anchor="w", pady=(0, 2))
+
         spoken_lang_map = get_spoken_language_display_map(self.ui_lang)
+        lang_pair_row = ctk.CTkFrame(pad_f, fg_color="transparent")
+        lang_pair_row.pack(fill="x", pady=(0, 10))
+
         lang_combo = ctk.CTkComboBox(
-            pad_f,
+            lang_pair_row,
             values=list(spoken_lang_map.keys()),
-            width=460,
+            width=232,
             font=ctk.CTkFont(family=FONT_FAMILY),
         )
-
         cur_lang = self.stt_service.config.get("language", "th")
         lang_combo.set(get_spoken_language_label(cur_lang, self.ui_lang))
-        lang_combo.pack(pady=(0, 10))
+        lang_combo.pack(side="left")
 
-        # 4. Global Hotkey Settings
+        ctk.CTkLabel(
+            lang_pair_row,
+            text="+",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+        ).pack(side="left", padx=6)
+
+        sec_lang_combo = ctk.CTkComboBox(
+            lang_pair_row,
+            values=list(spoken_lang_map.keys()),
+            width=232,
+            font=ctk.CTkFont(family=FONT_FAMILY),
+        )
+        cur_sec_lang = self.stt_service.config.get("secondary_language", "en")
+        sec_lang_combo.set(get_spoken_language_label(cur_sec_lang, self.ui_lang))
+        sec_lang_combo.pack(side="right")
+
+        # 4. Global Hotkey & Dual Sound Cue Settings
         ctk.CTkLabel(
             pad_f,
             text=t("settings_hotkey_header", lang=self.ui_lang),
@@ -700,13 +745,27 @@ class Voice2PromptApp(ctk.CTk):
         check_hotkey.pack(anchor="w", pady=(0, 6))
 
         hotkey_options = list(HOTKEY_PRESETS.keys())
-        hotkey_combo = ctk.CTkComboBox(pad_f, values=hotkey_options, width=460, font=ctk.CTkFont(family=FONT_FAMILY))
+        hotkey_combo = ctk.CTkComboBox(pad_f, values=hotkey_options, width=480, font=ctk.CTkFont(family=FONT_FAMILY))
         cur_combo = self.stt_service.config.get("global_hotkey_combo", "Ctrl + Alt + Space")
         if cur_combo in hotkey_options:
             hotkey_combo.set(cur_combo)
         else:
             hotkey_combo.set(hotkey_options[0])
-        hotkey_combo.pack(pady=(0, 16))
+        hotkey_combo.pack(pady=(0, 10))
+
+        sound_cue_var = tk.BooleanVar(value=self.stt_service.config.get("sound_cue_enabled", True))
+        sound_cue_txt = (
+            "🔊 เปิดเสียงสัญญาณคู่ 2 จังหวะ (เตือนตอนเริ่มอัด & แปลงเสร็จ)"
+            if self.ui_lang == "th"
+            else "🔊 Enable 2-Tone Audio Cues (Start & Complete Chime)"
+        )
+        check_sound_cue = ctk.CTkCheckBox(
+            pad_f,
+            text=sound_cue_txt,
+            variable=sound_cue_var,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+        )
+        check_sound_cue.pack(anchor="w", pady=(0, 14))
 
         # Save Button
         def save():
@@ -730,9 +789,12 @@ class Voice2PromptApp(ctk.CTk):
             if new_key != orig_key:
                 self.stt_service.set_user_api_key(new_key)
 
-            # Spoken Language
+            # Spoken Language Pair (Primary + Secondary)
             chosen_spoken_code = spoken_lang_map.get(lang_combo.get(), "th")
+            chosen_sec_code = spoken_lang_map.get(sec_lang_combo.get(), "en")
             self.stt_service.save_setting("language", chosen_spoken_code)
+            self.stt_service.save_setting("secondary_language", chosen_sec_code)
+            self.stt_service.save_setting("sound_cue_enabled", sound_cue_var.get())
 
             # Apply UI language immediately
             self.apply_ui_language(chosen_ui_lang)

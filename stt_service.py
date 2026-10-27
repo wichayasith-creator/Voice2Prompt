@@ -89,11 +89,13 @@ class STTService:
         data = {
             "groq_api_key": "",
             "language": "th",
+            "secondary_language": "en",
             "ui_lang": default_ui,
             "ui_language": default_ui,
             "model": "whisper-large-v3",
             "device_index": None,
             "auto_copy": True,
+            "sound_cue_enabled": True,
             "global_hotkey_enabled": True,
             "global_hotkey_combo": "Ctrl + Alt + Space",
         }
@@ -218,8 +220,9 @@ class STTService:
             data["language"] = target_lang
 
         # Send Thai context prompt ONLY when spoken language is Thai ('th') or Auto ('auto')
+        prompt_text = "สนทนาภาษาไทยและอังกฤษ ป้อนคำสั่ง AI เขียนโค้ด พรอมต์"
         if target_lang in ("th", "auto", None, ""):
-            data["prompt"] = "สนทนาภาษาไทยและอังกฤษ ป้อนคำสั่ง AI เขียนโค้ด พรอมต์"
+            data["prompt"] = prompt_text
 
         try:
             response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
@@ -247,7 +250,11 @@ class STTService:
             raise RuntimeError(t("err_generic_api", lang=ui_lang, code=status))
 
         result = response.json()
-        return result.get("text", "").strip()
+        out_text = result.get("text", "").strip()
+        # Filter out Whisper silence hallucination echoing the prompt string verbatim
+        if out_text and out_text.strip(" .,!?") == prompt_text:
+            return ""
+        return out_text
 
     def transcribe(self, wav_bytes: bytes, language: str = None) -> str:
         """
