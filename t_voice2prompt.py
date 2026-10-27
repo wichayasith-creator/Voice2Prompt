@@ -233,8 +233,15 @@ def test_i18n_translation_keys_match_all_11_ui_languages():
         assert len(get_spoken_language_display_map(lang_code)) == 12
 
 
+def _assert_friendly_error(msg: str, secret_key: str):
+    # Thai/CJK languages don't use spaces between every word, so check word count (>20) OR character length (>120)
+    assert len(msg.split()) > 20 or len(msg) > 120
+    assert secret_key not in msg
+    assert "Traceback" not in msg
+
+
 def test_stt_error_messages_429_401_5xx_timeout_conn():
-    """Items 9 & 16: Verify friendly (>20 words) bilingual error messages for 429, 401/403, 5xx, Timeout, ConnectionError."""
+    """Items 9 & 16: Verify friendly (>20 words / >120 chars) bilingual error messages for 429, 401/403, 5xx, Timeout, ConnectionError."""
     wav_bytes = _make_dummy_wav(duration_sec=1)
     secret_key = "gsk_super_secret_should_never_appear_in_error"
 
@@ -243,7 +250,7 @@ def test_stt_error_messages_429_401_5xx_timeout_conn():
         service.config["groq_api_key"] = secret_key
 
         for ui_lang in ("th", "en"):
-            service.config["ui_lang"] = ui_lang
+            service.save_setting("ui_lang", ui_lang)
 
             # 1. HTTP 429 with Retry-After header
             resp_429 = MagicMock(status_code=429, headers={"Retry-After": "25"})
@@ -251,10 +258,8 @@ def test_stt_error_messages_429_401_5xx_timeout_conn():
                 with pytest.raises(RuntimeError) as exc_429:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_429.value)
-                assert len(msg.split()) > 20
+                _assert_friendly_error(msg, secret_key)
                 assert "25" in msg
-                assert secret_key not in msg
-                assert "Traceback" not in msg
 
             # 2. HTTP 429 without Retry-After header
             resp_429_no_hdr = MagicMock(status_code=429, headers={})
@@ -262,8 +267,7 @@ def test_stt_error_messages_429_401_5xx_timeout_conn():
                 with pytest.raises(RuntimeError) as exc_429_b:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_429_b.value)
-                assert len(msg.split()) > 20
-                assert secret_key not in msg
+                _assert_friendly_error(msg, secret_key)
 
             # 3. HTTP 401 Unauthorized
             resp_401 = MagicMock(status_code=401, headers={})
@@ -271,8 +275,7 @@ def test_stt_error_messages_429_401_5xx_timeout_conn():
                 with pytest.raises(RuntimeError) as exc_401:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_401.value)
-                assert len(msg.split()) > 20
-                assert secret_key not in msg
+                _assert_friendly_error(msg, secret_key)
 
             # 4. HTTP 503 Server Error
             resp_503 = MagicMock(status_code=503, headers={})
@@ -280,25 +283,22 @@ def test_stt_error_messages_429_401_5xx_timeout_conn():
                 with pytest.raises(RuntimeError) as exc_503:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_503.value)
-                assert len(msg.split()) > 20
+                _assert_friendly_error(msg, secret_key)
                 assert "503" in msg
-                assert secret_key not in msg
 
             # 5. Timeout
             with patch("stt_service.requests.post", side_effect=requests.exceptions.Timeout("timed out")):
                 with pytest.raises(RuntimeError) as exc_to:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_to.value)
-                assert len(msg.split()) > 20
-                assert secret_key not in msg
+                _assert_friendly_error(msg, secret_key)
 
             # 6. ConnectionError
             with patch("stt_service.requests.post", side_effect=requests.exceptions.ConnectionError("DNS fail")):
                 with pytest.raises(RuntimeError) as exc_conn:
                     service.transcribe(wav_bytes, language="en")
                 msg = str(exc_conn.value)
-                assert len(msg.split()) > 20
-                assert secret_key not in msg
+                _assert_friendly_error(msg, secret_key)
 
 
 def test_version_semver():
