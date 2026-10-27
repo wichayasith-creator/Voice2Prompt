@@ -85,10 +85,12 @@ class STTService:
         self.config = self._load_config()
 
     def _load_config(self) -> dict:
+        default_ui = detect_default_ui_lang()
         data = {
             "groq_api_key": "",
             "language": "th",
-            "ui_language": detect_default_ui_lang(),
+            "ui_lang": default_ui,
+            "ui_language": default_ui,
             "model": "whisper-large-v3",
             "device_index": None,
             "auto_copy": True,
@@ -121,6 +123,9 @@ class STTService:
             value = str(value).strip()
             self._key_from_env = False
             self.config[key] = value
+        elif key in ("ui_lang", "ui_language"):
+            self.config["ui_lang"] = value
+            self.config["ui_language"] = value
         else:
             self.config[key] = value
 
@@ -187,7 +192,7 @@ class STTService:
             raise ValueError(t("err_invalid_wav", lang=ui_lang)) from e
 
     def _transcribe_single_chunk(self, wav_bytes: bytes, language: str = None) -> str:
-        ui_lang = self.config.get("ui_language", "th")
+        ui_lang = self.config.get("ui_lang") or self.config.get("ui_language", "th")
         api_key = self.config.get("groq_api_key", "").strip()
         if not api_key:
             raise ValueError(t("err_no_api_key", lang=ui_lang))
@@ -249,7 +254,7 @@ class STTService:
         Transcribes audio using Groq Whisper. Automatically handles chunking
         if recording exceeds 10 minutes (~19.2 MB).
         """
-        ui_lang = self.config.get("ui_language", "th")
+        ui_lang = self.config.get("ui_lang") or self.config.get("ui_language", "th")
         chunks = self.chunk_wav_bytes(wav_bytes, max_seconds=600, ui_lang=ui_lang)
         results = []
         for chunk in chunks:

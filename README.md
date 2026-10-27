@@ -26,7 +26,7 @@
   - Underlying Groq `whisper-large-v3` supports **99 languages**.
   - Built-in UI selector includes **11 popular languages** verified against Groq's ISO-639-1 specification: **Thai (`th`), English (`en`), Chinese (`zh`), Japanese (`ja`), Korean (`ko`), Spanish (`es`), French (`fr`), German (`de`), Hindi (`hi`), Indonesian (`id`), Vietnamese (`vi`)**, plus **Auto-detect (`auto`)**.
   - Smart context prompting: Thai-English technical vocabulary hints are injected **only** when transcribing in Thai (`th`) or Auto-detect (`auto`), keeping non-Thai transcriptions pure.
-- **💬 Bilingual Interface (Thai / English):** Automatically detects your Windows UI language on first launch, or switch between **Thai (`th`)** and **English (`en`)** anytime in **Settings (`⚙️`)** without restarting.
+- **💬 11 Interface Languages (Multilingual UI):** Automatically detects your Windows UI language on first launch, or switch the interface live in **Settings (`⚙️`)** across **11 languages** (**English, Thai, Chinese, Japanese, Korean, Spanish, French, German, Hindi, Indonesian, Vietnamese**) without restarting.
 - **⌨️ Background Global Hotkey (`Ctrl + Alt + Space`):** Start and stop recording from inside any IDE, browser, or terminal without switching windows. Includes automatic conflict detection if another app has already registered the same shortcut.
 - **📋 Auto-Copy to Clipboard:** Automatically copies the finished transcript to your clipboard—just press `Ctrl + V` in your AI CLI or chat box.
 - **🔒 Zero-Disk History & Audio:**

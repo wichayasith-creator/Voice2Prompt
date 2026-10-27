@@ -218,18 +218,19 @@ def test_stt_conditional_thai_prompt_and_11_languages():
                     assert "prompt" not in sent_data, f"Thai prompt must NOT be sent for language={code}"
 
 
-def test_i18n_translation_keys_match_th_and_en():
-    """Item 11: Verify Thai and English translation tables have identical keys and non-empty strings."""
-    th_keys = set(TRANSLATIONS["th"].keys())
-    en_keys = set(TRANSLATIONS["en"].keys())
-    assert th_keys == en_keys
+def test_i18n_translation_keys_match_all_11_ui_languages():
+    """Item 11: Verify all 11 UI languages have identical keys and non-empty strings."""
+    expected_ui_langs = {"th", "en", "zh", "ja", "ko", "es", "fr", "de", "hi", "id", "vi"}
+    assert set(TRANSLATIONS.keys()) == expected_ui_langs
 
-    for k in th_keys:
-        assert isinstance(TRANSLATIONS["th"][k], str) and len(TRANSLATIONS["th"][k].strip()) > 0
-        assert isinstance(TRANSLATIONS["en"][k], str) and len(TRANSLATIONS["en"][k].strip()) > 0
-
-    assert len(get_spoken_language_display_map("th")) == 12
-    assert len(get_spoken_language_display_map("en")) == 12
+    base_keys = set(TRANSLATIONS["en"].keys())
+    for lang_code in expected_ui_langs:
+        lang_keys = set(TRANSLATIONS[lang_code].keys())
+        assert lang_keys == base_keys, f"Key mismatch in UI language '{lang_code}'"
+        for k in base_keys:
+            val = TRANSLATIONS[lang_code][k]
+            assert isinstance(val, str) and len(val.strip()) > 0, f"Empty translation for {lang_code}.{k}"
+        assert len(get_spoken_language_display_map(lang_code)) == 12
 
 
 def test_stt_error_messages_429_401_5xx_timeout_conn():
