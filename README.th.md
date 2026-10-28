@@ -1,6 +1,6 @@
 > 🌐 **Language / ภาษา:** **[🇬🇧 English](README.md)** | **[🇹🇭 ภาษาไทย](README.th.md)**
 
-# 🎙️ Voice2Prompt (`v0.1.0`)
+# 🎙️ Voice2Prompt (`v0.1.0`) — *โดย Wichaya (`wichayasith`)*
 
 **โปรแกรมช่วยพิมพ์ด้วยเสียง 2 ภาษา (พูดไทยปนอังกฤษ) พูดเสร็จกด `Ctrl + V` วางสั่ง AI ได้เลย! (ขับเคลื่อนด้วย Groq `whisper-large-v3`)**
 
