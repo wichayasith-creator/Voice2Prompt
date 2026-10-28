@@ -3,6 +3,7 @@
 # 🎙️ Voice2Prompt (`v0.1.0`)
 
 **Speech-to-Text Desktop Studio for AI Prompting (Powered by Groq `whisper-large-v3`)**
+> 🇹🇭 **โปรแกรมช่วยพิมพ์ด้วยเสียง 2 ภาษา (พูดไทยปนอังกฤษ) พูดเสร็จกด `Ctrl + V` วางสั่ง AI ได้เลย!** *(กดปุ่มลัด `Ctrl + Alt + Space` จากหน้าจอไหนก็ได้)*
 
 [![Platform: Windows Only](https://img.shields.io/badge/Platform-Windows%2010%2F11%20Only-0078D6?logo=windows)](#requirements)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)

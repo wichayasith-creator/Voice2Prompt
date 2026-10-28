@@ -2,7 +2,7 @@
 
 # 🎙️ Voice2Prompt (`v0.1.0`)
 
-**โปรแกรมแปลงเสียงพูดเป็นข้อความ (Speech-to-Text) สำหรับคุยกับ AI บน Windows (ขับเคลื่อนด้วย Groq `whisper-large-v3`)**
+**โปรแกรมช่วยพิมพ์ด้วยเสียง 2 ภาษา (พูดไทยปนอังกฤษ) พูดเสร็จกด `Ctrl + V` วางสั่ง AI ได้เลย! (ขับเคลื่อนด้วย Groq `whisper-large-v3`)**
 
 [![Platform: Windows Only](https://img.shields.io/badge/Platform-Windows%2010%2F11%20Only-0078D6?logo=windows)](#ความต้องการของระบบ)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981.svg)](LICENSE)
