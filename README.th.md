@@ -83,7 +83,7 @@
 ### ขั้นตอนการรัน
 ```bash
 # 1. โคลนโปรเจกต์ลงเครื่อง
-git clone https://github.com/wichayasith-creator/Voice2Prompt.git
+git clone https://github.com/wichayasith/Voice2Prompt.git
 cd Voice2Prompt
 
 # 2. ติดตั้งไลบรารีสำหรับใช้งานจริง

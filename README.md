@@ -84,7 +84,7 @@ For vulnerability reporting instructions, please see [SECURITY.md](SECURITY.md).
 ### Steps
 ```bash
 # 1. Clone the repository
-git clone https://github.com/wichayasith-creator/Voice2Prompt.git
+git clone https://github.com/wichayasith/Voice2Prompt.git
 cd Voice2Prompt
 
 # 2. Install runtime dependencies
